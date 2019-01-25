@@ -180,13 +180,9 @@ class SentencePreprocess(object):
         return input_ids_list
 
     # input_ids转为embedding
-    def input_ids2vec(self, input_ids_list: list):
-        logging.info("input_ids to vector")
-        embeddings = []
-        for input_ids in input_ids_list:
-            embedding = bert_holder.predict([input_ids])
-            logging.debug("embedding:{}".format(embedding))
-            embeddings.append(embedding[0])
+    def input_ids2vec(self, input_ids: list):
+        logging.info("input_ids to embeddings")
+        embeddings = bert_holder.predict(input_ids)
         return embeddings
 
     # 标签转向量

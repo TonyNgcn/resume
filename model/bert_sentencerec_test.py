@@ -7,13 +7,13 @@ import tensorflow as tf
 from tensorflow import keras
 
 import config
-from preprocess.bert_sentencepre import preprocess as spreprocess
+from preprocess.bert_sentencepre_test import preprocess
 from tool.evaluate import default_evaluate
 
 
 class BertSentenceRecModel(object):
     def __init__(self, sentence_len: int = config.SENTENCE_LEN, wordvec_size: int = config.BERT_EMBEDDING_SIZE,
-                 classes: int = len(spreprocess.get_total_labels()),
+                 classes: int = len(preprocess.get_total_labels()),
                  study_rate: float = config.SR_STUDY_RATE, model_name: str = "bert_sentencerec.ckpt",
                  predictor: bool = False):
         self._sentence_len = sentence_len
@@ -114,7 +114,7 @@ class BertSentenceRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for train_x, train_y in spreprocess.get_batch_traindata(batch_size):
+            for train_x, train_y in preprocess.get_batch_traindata(batch_size):
                 _, train_pred_y = sess.run([train_opt, pred], feed_dict={ph_x: train_x, ph_y: train_y})
 
                 true_y = np.argmax(train_y, axis=1).copy()
@@ -154,8 +154,8 @@ class BertSentenceRecModel(object):
             saver.restore(sess, config.MODEL_DIC + "/" + self._model_name)
 
             test_true_y, test_pred_y = self._epoch_test(sess, ph_x, ph_y, outputs, batch_size, generator)
-            print(test_pred_y, test_true_y, spreprocess.get_total_labels())
-            default_evaluate.print_evaluate(test_true_y, test_pred_y, spreprocess.get_total_labels())
+            print(test_pred_y, test_true_y, preprocess.get_total_labels())
+            default_evaluate.print_evaluate(test_true_y, test_pred_y, preprocess.get_total_labels())
 
     # 单次迭代测试
     def _epoch_test(self, sess: tf.Session, ph_x, ph_y, pred, batch_size: int, generator=None):
@@ -163,7 +163,7 @@ class BertSentenceRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for test_x, test_y in spreprocess.get_batch_testdata(batch_size):
+            for test_x, test_y in preprocess.get_batch_testdata(batch_size):
                 pred_y = sess.run(pred, feed_dict={ph_x: test_x, ph_y: test_y})
 
                 true_y = np.argmax(test_y, axis=1).copy()
@@ -207,7 +207,7 @@ class BertSentenceRecModel(object):
         pred_y = self.predict(inputs)
         labels = list()
         for vector in pred_y:
-            labels.append(spreprocess.get_label(vector))
+            labels.append(preprocess.get_label(vector))
         return labels
 
 
