@@ -1,7 +1,7 @@
 #!/usr/bin/python 
 # -*- coding: utf-8 -*-
 
-from preprocess.bert_sentencepre_test import default_preprocess, SentenceRecDataLoader
+from preprocess.bert_sentencepre import default_preprocess, SentenceRecDataLoader
 from model.bert_sentencerec import defualt_model
 
 

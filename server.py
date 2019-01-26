@@ -3,16 +3,12 @@
 
 import logging
 import json
-from flask import Flask, Blueprint, request, Response
+from flask import Flask, request, Response
 from extract.extract import Extractor
 
 extractor = Extractor()
 
 app = Flask(__name__)
-
-# api_bp = Blueprint("api", __name__)
-#
-# app.register_blueprint(api_bp, url_prefix="/api")
 
 
 def success(data):

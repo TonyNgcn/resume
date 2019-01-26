@@ -48,20 +48,12 @@ class MyBertModel(object):
         if self._session is None:
             self._session, self._ph_input_ids, self._output = self.get_trained_model()
 
+        embeddings = []
         with self._session.graph.as_default():
-            embeddings = []
-            inputs_len = len(inputs)
-            current = 0
-            while current + 10 < inputs_len:
-                input = inputs[current:current + 10]
-                embedding = self._session.run(self._output, feed_dict={self._ph_input_ids: input})
-                embeddings.extend(embedding.tolist())
-                current += 10
-            input = inputs[current:]
-            embedding = self._session.run(self._output, feed_dict={self._ph_input_ids: input})
-            embeddings.extend(embedding.tolist())
-
-            return embeddings
+            for input in inputs:
+                embedding = self._session.run(self._output, feed_dict={self._ph_input_ids: [input]})
+                embeddings.append(embedding[0])
+        return embeddings
         # embeddings shape [batch_size, seq_length + 2, word_size]
 
 

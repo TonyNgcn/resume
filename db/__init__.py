@@ -1,4 +1,4 @@
 #!/usr/bin/python 
 # -*- coding: utf-8 -*-
 
-__all__ = ["mongo"]
+__all__ = ["mysql"]

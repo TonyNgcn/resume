@@ -69,3 +69,16 @@ WR_BIGRU1_DROPOUT = 0.5  # bigru1 dropout值
 
 # logging.basicConfig(filename=LOG_DIC+"/resume_import.log",format='%(asctime)s %(levelname)s:%(message)s', level=logging.ERROR)
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG)
+
+# 数据库
+DIALECT = 'mysql'
+DRIVER = 'pymysql'
+USERNAME = 'root'
+PASSWORD = 'root'
+HOST = '127.0.0.1'
+PORT = '3306'
+DATABASE = 'mark_data'
+
+SQLALCHEMY_DATABASE_URI = '{}+{}://{}:{}@{}:{}/{}?charset=utf8'.format(DIALECT, DRIVER, USERNAME, PASSWORD, HOST, PORT,
+                                                                       DATABASE)
+SQLALCHEMY_TRACK_MODIFICATIONS = False
