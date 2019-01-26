@@ -176,8 +176,6 @@ class BertSentenceRecModel(object):
 
     # 预测 返回标签向量列表
     def predict(self, inputs):
-        if self._session is None:
-            self._session, self._ph_x, _, _, _, self._pred = self.get_trained_model()
         with self._session.graph.as_default():
             pred_y = self._session.run(self._pred, feed_dict={self._ph_x: inputs})
             return pred_y

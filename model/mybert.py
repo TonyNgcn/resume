@@ -45,9 +45,6 @@ class MyBertModel(object):
 
     def predict(self, inputs):
         # inputs shape [batch_size, self._seq_length + 2] [CLS] words... [SEP]
-        if self._session is None:
-            self._session, self._ph_input_ids, self._output = self.get_trained_model()
-
         embeddings = []
         with self._session.graph.as_default():
             for input in inputs:

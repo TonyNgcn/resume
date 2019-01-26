@@ -207,8 +207,6 @@ class WordRecModel(object):
 
     # 预测 返回标签向量列表
     def predict(self, inputs):
-        if self._session is None:
-            self._session, self._ph_sequence_lengths, self._ph_x, _, _, _, self._pred = self.get_trained_model()
         with self._session.graph.as_default():
             lengths = [self._sentence_len for _ in range(len(inputs))]
             sequence_lengths = np.array(lengths, dtype=np.int32)
