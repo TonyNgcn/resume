@@ -1,7 +1,7 @@
 #!/usr/bin/python 
 # -*- coding: utf-8 -*-
 
-from sqlalchemy import Column, Integer, VARCHAR, TEXT, DATE, INT
+from sqlalchemy import Column, Integer, VARCHAR, TEXT
 from sqlalchemy.ext.declarative import declarative_base
 
 # 生成orm基类

@@ -6,18 +6,21 @@ import logging
 from tool import bigfile
 from extract import splitsentence
 from preprocess.bert_sentencepre import default_preprocess
-from model.bert_sentencerec import defualt_model
-from http.models import Mark
+from model.bert_sentencerec import BertSentenceRecModel
+from tables.models import Mark
 from db.mysql import Session
 
 
 class SentenceRecTag(object):
+    def __init__(self, model_name: str = "bert_sentencerec.ckpt"):
+        self._model = BertSentenceRecModel(model_name=model_name, predictor=True)
+
     def tag(self, filepath: str):
         resumes = self._read_file(filepath)
         for resume in resumes:
             sentences = splitsentence.resume2sentences(resume)
             embeddings = default_preprocess.sentences2embeddings(sentences)
-            labels = defualt_model.predict_label(embeddings)
+            labels = self._model.predict_label(embeddings)
             self._save(sentences, labels)
 
     # 读取简历文件
@@ -41,3 +44,6 @@ class SentenceRecTag(object):
             sess.commit()
         except Exception as e:
             logging.error(e)
+
+
+default_tag = SentenceRecTag()
