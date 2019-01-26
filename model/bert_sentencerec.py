@@ -7,13 +7,13 @@ import tensorflow as tf
 from tensorflow import keras
 
 import config
-from preprocess.bert_sentencepre import preprocess as spreprocess
+from preprocess.bert_sentencepre import default_preprocess
 from tool.evaluate import default_evaluate
 
 
 class BertSentenceRecModel(object):
     def __init__(self, sentence_len: int = config.SENTENCE_LEN, wordvec_size: int = config.BERT_EMBEDDING_SIZE,
-                 classes: int = len(spreprocess.get_total_labels()),
+                 classes: int = len(default_preprocess.get_total_labels()),
                  study_rate: float = config.SR_STUDY_RATE, model_name: str = "bert_sentencerec.ckpt",
                  predictor: bool = False):
         self._sentence_len = sentence_len
@@ -65,7 +65,7 @@ class BertSentenceRecModel(object):
         return sess, ph_x, ph_y, loss, train_opt, pred
 
     # 训练模型
-    def train(self, epochs: int = config.SR_EPOCHS, batch_size: int = config.SR_BATCH_SIZE,
+    def train(self, batch_size: int = config.SR_BATCH_SIZE,
               continue_train: bool = False, train_generator=None, test_generator=None):
         logging.info("train sentence recognition model")
         if continue_train:
@@ -75,25 +75,38 @@ class BertSentenceRecModel(object):
 
         with sess.graph.as_default():
             saver = tf.train.Saver(max_to_keep=1)
-            for epoch in range(epochs):
+            # 最高的f1值
+            # 五次没有提高就停止训练
+            top_f1 = 0
+            count = 0
+            epoch = 1
+            while True:
                 train_true_y, train_pred_y = self._epoch_train(sess, ph_x, ph_y, train_opt, outputs, batch_size,
                                                                train_generator)
                 acc = default_evaluate.calculate_accuracy(train_true_y, train_pred_y)
                 precision, recall, f1 = default_evaluate.calculate_avg_prf(train_true_y, train_pred_y)
-                print('epoch:{} batch size:{} acc:{} precision:{} recall:{} f1:{}'.format(epoch + 1, batch_size, acc,
+                print('epoch:{} batch size:{} acc:{} precision:{} recall:{} f1:{}'.format(epoch, batch_size, acc,
                                                                                           precision, recall, f1))
 
                 test_true_y, test_pred_y = self._epoch_test(sess, ph_x, ph_y, outputs, batch_size, test_generator)
                 val_acc = default_evaluate.calculate_accuracy(test_true_y, test_pred_y)
                 val_precision, val_recall, val_f1 = default_evaluate.calculate_avg_prf(test_true_y, test_pred_y)
-                print('epoch:{} batch size:{} val_acc:{} val_precision:{} val_recall:{} val_f1:{}'.format(epoch + 1,
+                print('epoch:{} batch size:{} val_acc:{} val_precision:{} val_recall:{} val_f1:{}'.format(epoch,
                                                                                                           batch_size,
                                                                                                           val_acc,
                                                                                                           val_precision,
                                                                                                           val_recall,
                                                                                                           val_f1))
-            logging.info("save sentencerec model")
-            saver.save(sess, config.MODEL_DIC + "/" + self._model_name)
+                if top_f1 <= val_f1:
+                    top_f1 = val_f1
+                    count = 0
+                    logging.info("save sentencerec model")
+                    saver.save(sess, config.MODEL_DIC + "/" + self._model_name)
+                else:
+                    if count >= 5:
+                        break
+                    count += 1
+                epoch += 1
 
     # 单次迭代训练
     def _epoch_train(self, sess: tf.Session, ph_x, ph_y, train_opt, pred, batch_size: int, generator=None):
@@ -101,34 +114,24 @@ class BertSentenceRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for train_x, train_y in spreprocess.get_batch_traindata(batch_size):
-                _, train_pred_y = sess.run([train_opt, pred], feed_dict={ph_x: train_x, ph_y: train_y})
-
-                true_y = np.argmax(train_y, axis=1).copy()
-                pred_y = np.argmax(train_pred_y, axis=1).copy()
-
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
+            get_batch_traindata = default_preprocess.get_batch_traindata
         else:
-            for train_x, train_y in generator(batch_size):
-                _, train_pred_y = sess.run([train_opt, pred], feed_dict={ph_x: train_x, ph_y: train_y})
-                true_y = np.argmax(train_y, axis=1).copy()
-                pred_y = np.argmax(train_pred_y, axis=1).copy()
+            get_batch_traindata = generator
 
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
+        for train_x, train_y in get_batch_traindata(batch_size):
+            _, train_pred_y = sess.run([train_opt, pred], feed_dict={ph_x: train_x, ph_y: train_y})
+
+            true_y = np.argmax(train_y, axis=1).copy()
+            pred_y = np.argmax(train_pred_y, axis=1).copy()
+
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y])
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y])
         return total_true_y, total_pred_y
 
     # 测试模型
@@ -141,8 +144,8 @@ class BertSentenceRecModel(object):
             saver.restore(sess, config.MODEL_DIC + "/" + self._model_name)
 
             test_true_y, test_pred_y = self._epoch_test(sess, ph_x, ph_y, outputs, batch_size, generator)
-            print(test_pred_y, test_true_y, spreprocess.get_total_labels())
-            default_evaluate.print_evaluate(test_true_y, test_pred_y, spreprocess.get_total_labels())
+            print(test_pred_y, test_true_y, default_preprocess.get_total_labels())
+            default_evaluate.print_evaluate(test_true_y, test_pred_y, default_preprocess.get_total_labels())
 
     # 单次迭代测试
     def _epoch_test(self, sess: tf.Session, ph_x, ph_y, pred, batch_size: int, generator=None):
@@ -150,41 +153,29 @@ class BertSentenceRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for test_x, test_y in spreprocess.get_batch_testdata(batch_size):
-                pred_y = sess.run(pred, feed_dict={ph_x: test_x, ph_y: test_y})
-
-                true_y = np.argmax(test_y, axis=1).copy()
-                pred_y = np.argmax(pred_y, axis=1).copy()
-
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
+            get_batch_testdata = default_preprocess.get_batch_testdata
         else:
-            for test_x, test_y in generator(batch_size):
-                pred_y = sess.run(pred, feed_dict={ph_x: test_x, ph_y: test_y})
+            get_batch_testdata = generator
 
-                true_y = np.argmax(test_y, axis=1).copy()
-                pred_y = np.argmax(pred_y, axis=1).copy()
+        for test_x, test_y in get_batch_testdata(batch_size):
+            pred_y = sess.run(pred, feed_dict={ph_x: test_x, ph_y: test_y})
 
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
+            true_y = np.argmax(test_y, axis=1).copy()
+            pred_y = np.argmax(pred_y, axis=1).copy()
+
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y])
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y])
+
         return total_true_y, total_pred_y
 
     # 预测 返回标签向量列表
     def predict(self, inputs):
-        if self._session is None:
-            self._session, self._ph_x, _, _, _, self._pred = self.get_trained_model()
         with self._session.graph.as_default():
             pred_y = self._session.run(self._pred, feed_dict={self._ph_x: inputs})
             return pred_y
@@ -194,7 +185,7 @@ class BertSentenceRecModel(object):
         pred_y = self.predict(inputs)
         labels = list()
         for vector in pred_y:
-            labels.append(spreprocess.get_label(vector))
+            labels.append(default_preprocess.get_label(vector))
         return labels
 
 

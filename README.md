@@ -14,3 +14,4 @@
 2. server.py是启动http服务提供api文件。
 3. train_model.py是训练模型文件。
 4. train_wordvec.py是训练词向量模型文件。
+5. resume_import.py是抽取简历信息元导入到MongoDB数据库文件。

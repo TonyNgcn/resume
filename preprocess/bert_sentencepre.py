@@ -6,19 +6,140 @@ import numpy as np
 import os
 
 import config
-from tool import bigfile, shuffle
-from holder.berth import bert_holder, tokenizer
+from tool import shuffle, bigfile
+from holder.berth import tokenizer, bert_holder
 
 
-class SentencePreprocess(object):
+# 用来加载数据
+class SentenceRecDataLoader(object):
+    # get_traindata()和get_testdata()函数一定要有
+    def __init__(self, rate: float = config.SR_RATE):
+        if rate <= 0 or rate >= 1:
+            logging.critical("rate must between 0 and 1")
+        self._rate = rate
+
+    # 获取数据
+    def _get_data(self):
+        datas = list()
+        tagdata_filenames = os.listdir(config.TAG_SR_DIC)
+        tagdata_filepaths = [config.TAG_SR_DIC + "/" + tagdata_filename
+                             for tagdata_filename in tagdata_filenames if tagdata_filename != ".D_Store"]
+        for tagdata_filepath in tagdata_filepaths:
+            if os.path.exists(tagdata_filepath):
+                for line in bigfile.get_lines(tagdata_filepath):
+                    datas.append(line)
+            else:
+                logging.warning("tag data file {} is not exist".format(tagdata_filepath))
+        return datas
+
+    # 切分数据
+    def _split_data(self, datas: list):
+        sentences = list()  # 保存分词后的句子
+        labels = list()  # 保存标签
+
+        for line in datas:
+            if line:
+                pair = line.strip("\n").split(";;;")  # 将句子和标签分开
+                if len(pair) == 2 and pair[0] and pair[1]:
+                    logging.debug("句子:{} 标签:{}".format(pair[0], pair[1]))
+                    sentences.append(pair[0])
+                    labels.append(pair[1])
+                else:
+                    logging.warning("error line {}".format(line))
+            else:
+                logging.warning("error line {}".format(line))
+        return sentences, labels  # 返回 句子列表，表示该句句子的标签列表
+
+    # 获取训练数据
+    def get_traindata(self):
+        datas = self._get_data()
+        datas_len = len(datas)
+        traindata_len = int(datas_len * self._rate)
+        traindatas = datas[:traindata_len]
+        return self._split_data(traindatas)
+
+    # 测试训练数据
+    def get_testdata(self):
+        datas = self._get_data()
+        datas_len = len(datas)
+        traindata_len = int(datas_len * self._rate)
+        traindatas = datas[traindata_len:]
+        return self._split_data(traindatas)
+
+
+# 用来处理数据成输入
+class SentenceRecPreprocess(object):
     _total_labels = ['ctime', 'ptime', 'basic', 'wexp', 'sexp', 'noinfo']  # 标签列表
 
-    # 获取标签列表
-    def get_total_labels(self):
-        return self._total_labels
+    # 修正数据
+    def fix(self, sentences: list, labels: list):
+        def label_in(label: str):
+            if label in self._total_labels:
+                return True
+            return False
 
-    # 获取标签向量
-    def get_labelvec(self, label: str):
+        fix_sentences = []
+        fix_labels = []
+        for sentence, label in zip(sentences, labels):
+            if label_in(label):
+                fix_sentences.append(sentence)
+                fix_labels.append(label)
+            else:
+                logging.warning("label {} not in total labels".format(label))
+
+        return fix_sentences, fix_labels
+
+    ###########################################################################
+    # 将句子转成字
+    def _split2char(self, sentences: list):
+        chars_list = []
+        for sentence in sentences:
+            chars = tokenizer.tokenize(sentence)
+            chars_list.append(chars)
+        return chars_list
+
+    # 截取字
+    def _regchar(self, chars_list: list):
+        regchars_list = []
+        for chars in chars_list:
+            regchars = []
+            chars_len = len(chars)
+            regchars.append("[CLS]")
+            if chars_len >= config.SENTENCE_LEN:
+                regchars.extend(chars[:config.SENTENCE_LEN])
+            else:
+                regchars.extend(chars)
+                for _ in range(config.SENTENCE_LEN - chars_len):
+                    regchars.append("[PAD]")
+            regchars.append("[SEP]")
+            regchars_list.append(regchars)
+        return regchars_list
+
+    # 转成input_ids
+    def _to_input_ids(self, chars_list: list):
+        input_ids_list = []
+        for chars in chars_list:
+            ids = tokenizer.convert_tokens_to_ids(chars)
+            input_ids_list.append(ids)
+        return input_ids_list
+
+    # 转成embeddings
+    def _to_embeddings(self, input_ids: list):
+        embeddings = bert_holder.predict(input_ids)
+        return embeddings
+
+    # 句子转embeddings
+    def sentences2embeddings(self, sentences: list):
+        logging.info("sentences to embeddings")
+        chars_list = self._split2char(sentences)
+        regchars_list = self._regchar(chars_list)
+        input_ids_list = self._to_input_ids(regchars_list)
+        embeddings = self._to_embeddings(input_ids_list)
+        return embeddings
+
+    ###########################################################################
+    # 单个标签转向量
+    def _to_vector(self, label: str):
         vector = list()
 
         if label in self._total_labels:
@@ -27,10 +148,27 @@ class SentencePreprocess(object):
                     vector.append(1.0)
                 else:
                     vector.append(0.0)
-            return vector
         else:
-            logging.error("label {} is not exist".format(label))
-            exit(1)
+            # 标签不存在就设为noinfo的one hot向量
+            logging.warning("label {} is not exist".format(label))
+            for _ in range(len(self._total_labels) - 1):
+                vector.append(0.0)
+            vector.append(1.0)
+        return vector
+
+    # 转成one-hot向量
+    def labels2vectors(self, labels: list):
+        logging.info("labels to one hot vectors")
+        vectors = []
+        for label in labels:
+            vector = self._to_vector(label)
+            vectors.append(vector)
+        return vectors
+
+    ###########################################################################
+    # 获取标签列表
+    def get_total_labels(self):
+        return self._total_labels
 
     # 获取标签
     def get_label(self, labelvec):
@@ -42,21 +180,22 @@ class SentencePreprocess(object):
             logging.warning("label vector {} error".format(labelvec))
             return self._total_labels[-1]
 
+    ###########################################################################
     # 加载训练数据
-    def load_traindata(self):
+    def _load_traindata(self):
         try:
-            strain_x = np.load(config.PREDATA_DIC + '/strain_x.npy')
-            strain_y = np.load(config.PREDATA_DIC + '/strain_y.npy')
+            strain_x = np.load(config.PREDATA_DIC + '/bert_strain_x.npy')
+            strain_y = np.load(config.PREDATA_DIC + '/bert_strain_y.npy')
             return strain_x, strain_y
         except Exception as e:
             logging.error(e)
             exit(1)
 
     # 加载测试数据
-    def load_testdata(self):
+    def _load_testdata(self):
         try:
-            stest_x = np.load(config.PREDATA_DIC + '/stest_x.npy')
-            stest_y = np.load(config.PREDATA_DIC + '/stest_y.npy')
+            stest_x = np.load(config.PREDATA_DIC + '/bert_stest_x.npy')
+            stest_y = np.load(config.PREDATA_DIC + '/bert_stest_y.npy')
             return stest_x, stest_y
         except Exception as e:
             logging.error(e)
@@ -64,7 +203,7 @@ class SentencePreprocess(object):
 
     # 获取打乱后的训练数据
     def get_traindata(self):
-        strain_x, strain_y = self.load_traindata()
+        strain_x, strain_y = self._load_traindata()
 
         strain_x, strain_y = shuffle.shuffle_both(strain_x, strain_y)  # 打乱数据
 
@@ -76,7 +215,7 @@ class SentencePreprocess(object):
 
     # 获取打乱后的测试数据
     def get_testdata(self):
-        stest_x, stest_y = self.load_testdata()
+        stest_x, stest_y = self._load_testdata()
 
         stest_x, stest_y = shuffle.shuffle_both(stest_x, stest_y)  # 打乱数据
 
@@ -110,7 +249,7 @@ class SentencePreprocess(object):
         if len(stest_x[start:]) > 0:
             yield stest_x[start:], stest_y[start:]
 
-    def save_data(self, filename: str, data: list):
+    def _save_data(self, filename: str, data: list):
         try:
             if len(data) == 0:
                 logging.warning("data length is 0")
@@ -124,8 +263,8 @@ class SentencePreprocess(object):
     # 删除训练数据
     def remove_traindata(self):
         try:
-            os.remove(config.PREDATA_DIC + "/strain_x.npy")
-            os.remove(config.PREDATA_DIC + "/strain_y.npy")
+            os.remove(config.PREDATA_DIC + "/bert_strain_x.npy")
+            os.remove(config.PREDATA_DIC + "/bert_strain_y.npy")
             logging.info("remove train data success")
         except Exception as e:
             logging.warning(e)
@@ -133,135 +272,36 @@ class SentencePreprocess(object):
     # 删除测试数据
     def remove_testdata(self):
         try:
-            os.remove(config.PREDATA_DIC + "/stest_x.npy")
-            os.remove(config.PREDATA_DIC + "/stest_y.npy")
+            os.remove(config.PREDATA_DIC + "/bert_stest_x.npy")
+            os.remove(config.PREDATA_DIC + "/bert_stest_y.npy")
             logging.info("remove test data success")
         except Exception as e:
             logging.warning(e)
 
-    # 句子分字
-    def sentence2tokens(self, sentences: list):
-        tokens_list = []
-        for sentence in sentences:
-            tokens = []
-            tokens.append("[CLS]")
-            token = tokenizer.tokenize(sentence)
-            tokens.extend(token)
-            tokens.append("[SEP]")
-            tokens_list.append(tokens)
-        return tokens_list
+    ###########################################################################
+    # 处理标注的训练数据
+    def deal_traindata(self, loader):
+        sentences, labels = loader.get_traindata()
+        fix_sentences, fix_labels = self.fix(sentences, labels)
+        embeddings = self.sentences2embeddings(fix_sentences)
+        vectors = self.labels2vectors(fix_labels)
+        self._save_data("bert_strain_x.npy", embeddings)
+        self._save_data("bert_strain_y.npy", vectors)
 
-    # 句子分字 返回填充后的tokens列表
-    def sentence2regtokens(self, sentences: list):
-        regtokens_list = []
-        for sentence in sentences:
-            tokens = []
-            tokens.append("[CLS]")
-            token = tokenizer.tokenize(sentence)
-            token_len = len(token)
-            if token_len >= config.SENTENCE_LEN:
-                tokens.extend(token[:config.SENTENCE_LEN])
-            else:
-                tokens.extend(token)
-                for _ in range(config.SENTENCE_LEN - token_len):
-                    tokens.append("[PAD]")
-            tokens.append("[SEP]")
-            logging.debug("tokens:{}".format(tokens))
-            regtokens_list.append(tokens)
-        return regtokens_list
-
-    # 将tokens转为input_ids
-    def tokens2input_ids(self, tokens_list):
-        input_ids_list = []
-        for tokens in tokens_list:
-            input_ids = tokenizer.convert_tokens_to_ids(tokens)
-            logging.debug("input_ids:{}".format(input_ids))
-            input_ids_list.append(input_ids)
-        return input_ids_list
-
-    # input_ids转为embedding
-    def input_ids2vec(self, input_ids_list: list):
-        logging.info("input_ids to vector")
-        embeddings = []
-        for input_ids in input_ids_list:
-            embedding = bert_holder.predict([input_ids])
-            logging.debug("embedding:{}".format(embedding))
-            embeddings.append(embedding[0])
-        return embeddings
-
-    # 标签转向量
-    def label2vec(self, labels: list):
-        logging.info("label to vector")
-        labelvec_list = list()  # 标签向量列表
-
-        for label in labels:
-            labelvec = self.get_labelvec(label)
-            labelvec_list.append(labelvec)
-        return labelvec_list
-
-    # 处理标注数据
-    def deal_tagdata(self, tagdata_filepaths: list, rate: float = config.SR_RATE):
-        logging.info("begin deal sentence tag data")
-        if rate < 0 or rate > 1:
-            logging.error("rate is not between 0 and 1")
-            exit(1)
-
-        datas = list()
-        for tagdata_filepath in tagdata_filepaths:
-            if os.path.exists(tagdata_filepath):
-                for line in bigfile.get_lines(tagdata_filepath):
-                    datas.append(line)
-            else:
-                logging.warning("tag data file {} is not exist".format(tagdata_filepath))
-
-        # random.shuffle(datas)
-        sentences, labels = self._split_tagdata(datas)
-        datas = None
-
-        regtokens_list = self.sentence2regtokens(sentences)
-        sentences = None
-
-        input_ids = self.tokens2input_ids(regtokens_list)
-        regtokens_list = None
-
-        embeddings = self.input_ids2vec(input_ids)
-        labelvecs = self.label2vec(labels)
-        input_ids = None
-        labels = None
-
-        # 将数据保存下来
-        total_size = len(embeddings)
-
-        train_x = embeddings[:int(total_size * rate)]
-        train_y = labelvecs[:int(total_size * rate)]
-        test_x = embeddings[int(total_size * rate):]
-        test_y = labelvecs[int(total_size * rate):]
-        embeddings = None
-        labelvecs = None
-
-        logging.info("deal sentence tag data end")
-        return train_x, train_y, test_x, test_y
-
-    def _split_tagdata(self, datas: list):
-        sentences = list()  # 保存分词后的句子
-        label_list = list()  # 保存标签
-
-        for line in datas:
-            if line:
-                pair = line.strip("\n").split(";;;")  # 将句子和标签分开
-                if len(pair) == 2 and pair[0] and pair[1]:
-                    if pair[1] in self._total_labels:
-                        # sentence_words = jieba_holder.lcut(pair[0])
-                        logging.debug("句子:{} 标签:{}".format(pair[0], pair[1]))
-                        sentences.append(pair[0])
-                        label_list.append(pair[1])
-                    else:
-                        logging.warning("error line {}".format(line))
-                else:
-                    logging.warning("error line {}".format(line))
-            else:
-                logging.warning("error line {}".format(line))
-        return sentences, label_list  # 返回 句子列表，表示该句句子的标签列表
+    # 处理标注的测试数据
+    def deal_testdata(self, loader):
+        sentences, labels = loader.get_testdata()
+        fix_sentences, fix_labels = self.fix(sentences, labels)
+        embeddings = self.sentences2embeddings(fix_sentences)
+        vectors = self.labels2vectors(fix_labels)
+        self._save_data("bert_stest_x.npy", embeddings)
+        self._save_data("bert_stest_y.npy", vectors)
 
 
-preprocess = SentencePreprocess()
+default_preprocess = SentenceRecPreprocess()
+
+if __name__ == '__main__':
+    loader = SentenceRecDataLoader()
+    preprocess = SentenceRecPreprocess()
+    preprocess.deal_traindata(loader)
+    preprocess.deal_testdata(loader)

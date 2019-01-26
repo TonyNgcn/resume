@@ -253,6 +253,9 @@ class WordPreprocess(object):
         logging.info("deal word tag data end")
         return train_x, train_y, test_x, test_y
 
+    def split_tagdata(self, datas: list):
+        return self._split_tagdata(datas)
+
     def _split_tagdata(self, datas: list):
         if len(datas) % 2 == 1:
             logging.error("datas lenght error")

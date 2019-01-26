@@ -20,7 +20,7 @@ class MyBertModel(object):
         graph = tf.Graph()
         with graph.as_default():
             ph_input_ids = tf.placeholder(dtype=tf.int32, shape=[None, self._seq_length + 2], name="ph_input_ids")
-            con = BertConfig.from_json_file("bert_config.json")
+            con = BertConfig.from_json_file(config.PROJECT_ROOT + "/bert_config.json")
             bert_model = BertModel(config=con, is_training=False, input_ids=ph_input_ids,
                                    use_one_hot_embeddings=True)
             output = bert_model.get_sequence_output()
@@ -45,12 +45,12 @@ class MyBertModel(object):
 
     def predict(self, inputs):
         # inputs shape [batch_size, self._seq_length + 2] [CLS] words... [SEP]
-        if self._session is None:
-            self._session, self._ph_input_ids, self._output = self.get_trained_model()
-
+        embeddings = []
         with self._session.graph.as_default():
-            embeddings = self._session.run(self._output, feed_dict={self._ph_input_ids: inputs})
-            return embeddings
+            for input in inputs:
+                embedding = self._session.run(self._output, feed_dict={self._ph_input_ids: [input]})
+                embeddings.append(embedding[0])
+        return embeddings
         # embeddings shape [batch_size, seq_length + 2, word_size]
 
 
