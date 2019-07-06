@@ -3,7 +3,7 @@
 
 import logging
 import json
-from flask import Flask, request, Response
+from flask import Flask, request, Response, render_template
 from extract.extract import Extractor
 
 extractor = Extractor()
@@ -28,7 +28,18 @@ def fail(msg: str):
     return json.dumps(body, ensure_ascii=False)
 
 
-@app.route("/single_extract", methods=["post"])
+# HOME页面
+@app.route('/', methods=['GET',"POST"])
+def home():
+    if request.method == 'GET':
+        return render_template('home.html')
+    else:
+        resume = request.form.get("resume_input")
+        regresume = extractor.single_extract(resume)
+        return render_template("home.html", regresume=regresume)
+
+
+@app.route("/single_extract", methods=["POST"])
 def single_extract():
     resume = request.json["resume"]
     if isinstance(resume, str):
@@ -44,7 +55,15 @@ def single_extract():
         return Response(fail("resume 格式错误"), mimetype="application/json")
 
 
-@app.route("/batch_extract", methods=["post"])
+@app.route("/single_extract_form", methods=["POST"])
+def single_extract_form():
+    print("test")
+    resume = request.form.get("resume")
+    regresume = extractor.single_extract(resume)
+    return render_template("home.html", regresume=regresume)
+
+
+@app.route("/batch_extract", methods=["POST"])
 def batch_extract():
     resumes = request.json["resumes"]
     if isinstance(resumes, list):

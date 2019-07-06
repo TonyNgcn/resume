@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+import matplotlib.pyplot as plt
 
 import config
 from preprocess.bert_sentencepre import default_preprocess
@@ -66,7 +67,7 @@ class BertSentenceRecModel(object):
 
     # 训练模型
     def train(self, batch_size: int = config.SR_BATCH_SIZE,
-              continue_train: bool = False, train_generator=None, test_generator=None):
+              continue_train: bool = False, train_generator=None, val_generator=None):
         logging.info("train sentence recognition model")
         if continue_train:
             sess, ph_x, ph_y, loss, train_opt, outputs = self.get_trained_model()
@@ -80,6 +81,18 @@ class BertSentenceRecModel(object):
             top_f1 = 0
             count = 0
             epoch = 1
+
+            png_epochs = []
+            png_accs = []
+            png_f1s = []
+
+            plt.figure(figsize=(10, 5))
+            plt.title("Training text classification model using supervised learning")
+            plt.xlabel(u"Epoch")
+            plt.xticks(np.arange(0, config.SR_EPOCHS + 1, 1))
+            plt.ylabel(u"Effect")
+            plt.yticks(np.arange(0.7, 1.1, 0.05))
+
             while True:
                 train_true_y, train_pred_y = self._epoch_train(sess, ph_x, ph_y, train_opt, outputs, batch_size,
                                                                train_generator)
@@ -88,7 +101,7 @@ class BertSentenceRecModel(object):
                 print('epoch:{} batch size:{} acc:{} precision:{} recall:{} f1:{}'.format(epoch, batch_size, acc,
                                                                                           precision, recall, f1))
 
-                test_true_y, test_pred_y = self._epoch_test(sess, ph_x, ph_y, outputs, batch_size, test_generator)
+                test_true_y, test_pred_y = self._epoch_val(sess, ph_x, ph_y, outputs, batch_size, val_generator)
                 val_acc = default_evaluate.calculate_accuracy(test_true_y, test_pred_y)
                 val_precision, val_recall, val_f1 = default_evaluate.calculate_avg_prf(test_true_y, test_pred_y)
                 print('epoch:{} batch size:{} val_acc:{} val_precision:{} val_recall:{} val_f1:{}'.format(epoch,
@@ -97,15 +110,40 @@ class BertSentenceRecModel(object):
                                                                                                           val_precision,
                                                                                                           val_recall,
                                                                                                           val_f1))
+
+                png_epochs.append(epoch)
+                png_accs.append(val_acc)
+                png_f1s.append(val_f1)
+
                 if top_f1 <= val_f1:
                     top_f1 = val_f1
                     count = 0
                     logging.info("save sentencerec model")
                     saver.save(sess, config.MODEL_DIC + "/" + self._model_name)
+
                 else:
                     if count >= 5:
+                        plt.plot(png_epochs, png_accs, "-", label="Accuracy")
+                        plt.plot(png_epochs, png_f1s, "-", color="r", label="F1-measure")
+                        plt.legend()
+                        plt.grid()
+                        plt.savefig(config.PNG_DIC + "/简历特征句分类模型有监督学习实验.png")
                         break
+
                     count += 1
+
+                # if epoch >= config.SR_EPOCHS:
+                #     plt.plot(png_epochs, png_accs, "-", label="Accuracy")
+                #     plt.plot(png_epochs, png_f1s, "-", color="r", label="F1-measure")
+                #     plt.legend()
+                #     plt.grid()
+                #     plt.savefig(config.PNG_DIC + "/简历特征句分类模型有监督学习实验.png")
+                #     break
+
+                # else:
+                #     if count >= 5:
+                #         break
+                #     count += 1
                 epoch += 1
 
     # 单次迭代训练
@@ -146,6 +184,34 @@ class BertSentenceRecModel(object):
             test_true_y, test_pred_y = self._epoch_test(sess, ph_x, ph_y, outputs, batch_size, generator)
             print(test_pred_y, test_true_y, default_preprocess.get_total_labels())
             default_evaluate.print_evaluate(test_true_y, test_pred_y, default_preprocess.get_total_labels())
+
+    # 单次迭代验证
+    def _epoch_val(self, sess: tf.Session, ph_x, ph_y, pred, batch_size: int, generator=None):
+        total_true_y = None
+        total_pred_y = None
+
+        if generator is None:
+            get_batch_valdata = default_preprocess.get_batch_valdata
+        else:
+            get_batch_valdata = generator
+
+        for val_x, val_y in get_batch_valdata(batch_size):
+            pred_y = sess.run(pred, feed_dict={ph_x: val_x, ph_y: val_y})
+
+            true_y = np.argmax(val_y, axis=1).copy()
+            pred_y = np.argmax(pred_y, axis=1).copy()
+
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y])
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y])
+
+        return total_true_y, total_pred_y
+
 
     # 单次迭代测试
     def _epoch_test(self, sess: tf.Session, ph_x, ph_y, pred, batch_size: int, generator=None):

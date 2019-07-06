@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <script src="{{ url_for('static',filename='js/jquery.js') }}"></script>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/index.css') }}">
+</head>
+<body>
+<div class="warp">
+    <div class="type_in">
+        <form action="{{ url_for('home') }}" method="post">
+            <textarea class="input" id="input" name="resume">{{ resume|default('') }}</textarea>
+            <input type="submit" value="提交" class="submit">
+        </form>
+    </div>
+    <script>
+        function readyNumber() {
+            $('#input').each(function () {
+                this.setAttribute('style', 'height:' + (this.scrollHeight) + 'px;overflow-y:hidden;');
+            }).on('input', function () {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            })
+        }
+
+        readyNumber()
+    </script>
+    <div class="content" id="content">
+        {% if regresume %}
+            <h3>基本信息：</h3>
+            {% if regresume['basic_info']['name'] %}
+                <h3>姓名：{{ regresume['basic_info']['name'] }}</h3>
+            {% endif %}
+            {% if regresume['basic_info']['sex'] %}
+                <h3>性别：{{ regresume['basic_info']['sex'] }}</h3>
+            {% endif %}
+            {% if regresume['basic_info']['nationality'] %}
+                <h3>国籍：{{ regresume['basic_info']['nationality'] }}</h3>
+            {% endif %}
+            {% if regresume['basic_info']['nation'] %}
+                <h3>民族：{{ regresume['basic_info']['nation'] }}</h3>
+            {% endif %}
+            {% if regresume['basic_info']['born'] %}
+                <h3>出生时间：{{ regresume['basic_info']['born'] }}</h3>
+            {% endif %}
+            <h3>学习经历：</h3>
+            <h3>过去：</h3>
+            {% for exp in regresume['school_exp']['past'] %}
+                {% if exp['time'] %}
+                    <h3>时间：{{ exp['time'] }}</h3>
+                {% endif %}
+                {% if exp['school'] %}
+                    <h3>学校：{{ exp['school'] }}</h3>
+                {% endif %}
+                {% if exp['college'] %}
+                    <h3>院系：{{ exp['college'] }}</h3>
+                {% endif %}
+                {% if exp['pro'] %}
+                    <h3>专业：{{ exp['pro'] }}</h3>
+                {% endif %}
+                {% if exp['degree'] %}
+                    <h3>学位：{{ exp['degree'] }}</h3>
+                {% endif %}
+                {% if exp['edu'] %}
+                    <h3>学历：{{ exp['edu'] }}</h3>
+                {% endif %}
+            {% endfor %}
+            <h3>现在：</h3>
+            {% for exp in regresume['school_exp']['current'] %}
+                {% if exp['time'] %}
+                    <h3>时间：{{ exp['time'] }}</h3>
+                {% endif %}
+                {% if exp['school'] %}
+                    <h3>学校：{{ exp['school'] }}</h3>
+                {% endif %}
+                {% if exp['college'] %}
+                    <h3>院系：{{ exp['college'] }}</h3>
+                {% endif %}
+                {% if exp['pro'] %}
+                    <h3>专业：{{ exp['pro'] }}</h3>
+                {% endif %}
+                {% if exp['degree'] %}
+                    <h3>学位：{{ exp['degree'] }}</h3>
+                {% endif %}
+                {% if exp['edu'] %}
+                    <h3>学历：{{ exp['edu'] }}</h3>
+                {% endif %}
+            {% endfor %}
+            <h3>工作经历：</h3>
+            <h3>过去：</h3>
+            {% for exp in regresume['work_exp']['past'] %}
+                {% if exp['time'] %}
+                    <h3>时间：{{ exp['time'] }}</h3>
+                {% endif %}
+                {% if exp['place'] %}
+                    <h3>地点：{{ exp['place'] }}</h3>
+                {% endif %}
+                {% if exp['job']|length > 0 %}
+                    <h3>职位：{{ exp['job']|join('、') }}</h3>
+                {% endif %}
+            {% endfor %}
+            <h3>现在：</h3>
+            {% for exp in regresume['work_exp']['current'] %}
+                {% if exp['time'] %}
+                    <h3>时间：{{ exp['time'] }}</h3>
+                {% endif %}
+                {% if exp['place'] %}
+                    <h3>地点：{{ exp['place'] }}</h3>
+                {% endif %}
+                {% if exp['job']|length > 0 %}
+                    <h3>职位：{{ exp['job']|join('、') }}</h3>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

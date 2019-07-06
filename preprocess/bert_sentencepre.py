@@ -1,12 +1,13 @@
 #!/usr/bin/python 
 # -*- coding: utf-8 -*-
 
+import time
 import logging
 import numpy as np
 import os
 
 import config
-from tool import shuffle, bigfile
+from tool import shuffle, bigfile, mysplit
 from holder.berth import tokenizer, bert_holder
 
 
@@ -17,6 +18,7 @@ class SentenceRecDataLoader(object):
         if rate <= 0 or rate >= 1:
             logging.critical("rate must between 0 and 1")
         self._rate = rate
+        self._datas = self._get_data()
 
     # 获取数据
     def _get_data(self):
@@ -52,19 +54,33 @@ class SentenceRecDataLoader(object):
 
     # 获取训练数据
     def get_traindata(self):
-        datas = self._get_data()
+        datas = self._datas
         datas_len = len(datas)
         traindata_len = int(datas_len * self._rate)
         traindatas = datas[:traindata_len]
+        print("训练数据条数：", len(traindatas))
+        time.sleep(5)
         return self._split_data(traindatas)
+
+    # 验证训练数据
+    def get_valdata(self):
+        datas = self._datas
+        datas_len = len(datas)
+        valdata_len = int(datas_len * self._rate)
+        valdatas = datas[valdata_len:int((valdata_len + datas_len) / 2)]
+        print("验证数据条数：", len(valdatas))
+        time.sleep(5)
+        return self._split_data(valdatas)
 
     # 测试训练数据
     def get_testdata(self):
-        datas = self._get_data()
+        datas = self._datas
         datas_len = len(datas)
-        traindata_len = int(datas_len * self._rate)
-        traindatas = datas[traindata_len:]
-        return self._split_data(traindatas)
+        testdata_len = int(datas_len * self._rate)
+        testdatas = datas[int((testdata_len + datas_len) / 2):]
+        print("测试数据条数：", len(testdatas))
+        time.sleep(5)
+        return self._split_data(testdatas)
 
 
 # 用来处理数据成输入
@@ -94,7 +110,9 @@ class SentenceRecPreprocess(object):
     def _split2char(self, sentences: list):
         chars_list = []
         for sentence in sentences:
-            chars = tokenizer.tokenize(sentence)
+            chars = mysplit.split(sentence)
+            # chars = tokenizer.tokenize(sentence)
+            # chars = list(sentence)
             chars_list.append(chars)
         return chars_list
 
@@ -115,6 +133,17 @@ class SentenceRecPreprocess(object):
             regchars_list.append(regchars)
         return regchars_list
 
+    def _to_lower(self, chars_list: list):
+        new_chars_list = []
+        for chars in chars_list:
+            new_chars = []
+            for char in chars:
+                if len(char) == 1:
+                    char = char.lower()
+                new_chars.append(char)
+            new_chars_list.append(new_chars)
+        return new_chars_list
+
     # 转成input_ids
     def _to_input_ids(self, chars_list: list):
         input_ids_list = []
@@ -130,12 +159,23 @@ class SentenceRecPreprocess(object):
 
     # 句子转embeddings
     def sentences2embeddings(self, sentences: list):
-        logging.info("sentences to embeddings")
         chars_list = self._split2char(sentences)
         regchars_list = self._regchar(chars_list)
-        input_ids_list = self._to_input_ids(regchars_list)
+        lower_chars_list = self._to_lower(regchars_list)
+        input_ids_list = self._to_input_ids(lower_chars_list)
         embeddings = self._to_embeddings(input_ids_list)
         return embeddings
+
+    def sentences2chars_list(self, sentences: list):
+        return self._split2char(sentences)
+
+    def sentences2regchars_list(self, sentences: list):
+        chars_list = self._split2char(sentences)
+        regchars_list = self._regchar(chars_list)
+        return regchars_list
+
+    def chars2regchars(self, chars_list: list):
+        return self._regchar(chars_list)
 
     ###########################################################################
     # 单个标签转向量
@@ -192,6 +232,16 @@ class SentenceRecPreprocess(object):
             exit(1)
 
     # 加载测试数据
+    def _load_valdata(self):
+        try:
+            sval_x = np.load(config.PREDATA_DIC + '/bert_sval_x.npy')
+            sval_y = np.load(config.PREDATA_DIC + '/bert_sval_y.npy')
+            return sval_x, sval_y
+        except Exception as e:
+            logging.error(e)
+            exit(1)
+
+    # 加载测试数据
     def _load_testdata(self):
         try:
             stest_x = np.load(config.PREDATA_DIC + '/bert_stest_x.npy')
@@ -211,6 +261,18 @@ class SentenceRecPreprocess(object):
             return strain_x, strain_y
         else:
             logging.error("train data length is less than 0")
+            exit(1)
+
+    # 获取打乱后的测试数据
+    def get_valdata(self):
+        sval_x, sval_y = self._load_valdata()
+
+        sval_x, sval_y = shuffle.shuffle_both(sval_x, sval_y)  # 打乱数据
+
+        if len(sval_x) > 0:
+            return sval_x, sval_y
+        else:
+            logging.error("val data length is less than 0")
             exit(1)
 
     # 获取打乱后的测试数据
@@ -236,6 +298,18 @@ class SentenceRecPreprocess(object):
             start += batch_size
         if len(strain_x[start:]) > 0:
             yield strain_x[start:], strain_y[start:]
+
+    # 批量获取打乱后的验证数据
+    def get_batch_valdata(self, batch_size: int):
+        sval_x, sval_y = self.get_valdata()
+
+        total_size = len(sval_x)
+        start = 0
+        while start + batch_size < total_size:
+            yield sval_x[start:start + batch_size], sval_y[start:start + batch_size]
+            start += batch_size
+        if len(sval_x[start:]) > 0:
+            yield sval_x[start:], sval_y[start:]
 
     # 批量获取打乱后的测试数据
     def get_batch_testdata(self, batch_size: int):
@@ -269,6 +343,15 @@ class SentenceRecPreprocess(object):
         except Exception as e:
             logging.warning(e)
 
+    # 删除验证数据
+    def remove_valdata(self):
+        try:
+            os.remove(config.PREDATA_DIC + "/bert_sval_x.npy")
+            os.remove(config.PREDATA_DIC + "/bert_sval_y.npy")
+            logging.info("remove val data success")
+        except Exception as e:
+            logging.warning(e)
+
     # 删除测试数据
     def remove_testdata(self):
         try:
@@ -287,6 +370,15 @@ class SentenceRecPreprocess(object):
         vectors = self.labels2vectors(fix_labels)
         self._save_data("bert_strain_x.npy", embeddings)
         self._save_data("bert_strain_y.npy", vectors)
+
+    # 处理标注的测试数据
+    def deal_valdata(self, loader):
+        sentences, labels = loader.get_valdata()
+        fix_sentences, fix_labels = self.fix(sentences, labels)
+        embeddings = self.sentences2embeddings(fix_sentences)
+        vectors = self.labels2vectors(fix_labels)
+        self._save_data("bert_sval_x.npy", embeddings)
+        self._save_data("bert_sval_y.npy", vectors)
 
     # 处理标注的测试数据
     def deal_testdata(self, loader):

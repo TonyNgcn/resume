@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+import matplotlib.pyplot as plt
 
 import config
 from preprocess.sentencepre import preprocess as spreprocess
@@ -64,7 +65,7 @@ class SentenceRecModel(object):
 
     # 训练模型
     def train(self, epochs: int = config.SR_EPOCHS, batch_size: int = config.SR_BATCH_SIZE,
-              continue_train: bool = False, train_generator=None, test_generator=None):
+              continue_train: bool = False, train_generator=None, val_generator=None):
         logging.info("train sentence recognition model")
         if continue_train:
             sess, ph_x, ph_y, loss, train_opt, outputs = self.get_trained_model()
@@ -73,6 +74,11 @@ class SentenceRecModel(object):
 
         with sess.graph.as_default():
             saver = tf.train.Saver(max_to_keep=1)
+
+            png_epochs = []
+            png_accs = []
+            png_f1s = []
+
             for epoch in range(epochs):
                 train_true_y, train_pred_y = self._epoch_train(sess, ph_x, ph_y, train_opt, outputs, batch_size,
                                                                train_generator)
@@ -81,7 +87,7 @@ class SentenceRecModel(object):
                 print('epoch:{} batch size:{} acc:{} precision:{} recall:{} f1:{}'.format(epoch + 1, batch_size, acc,
                                                                                           precision, recall, f1))
 
-                test_true_y, test_pred_y = self._epoch_test(sess, ph_x, ph_y, outputs, batch_size, test_generator)
+                test_true_y, test_pred_y = self._epoch_val(sess, ph_x, ph_y, outputs, batch_size, val_generator)
                 val_acc = default_evaluate.calculate_accuracy(test_true_y, test_pred_y)
                 val_precision, val_recall, val_f1 = default_evaluate.calculate_avg_prf(test_true_y, test_pred_y)
                 print('epoch:{} batch size:{} val_acc:{} val_precision:{} val_recall:{} val_f1:{}'.format(epoch + 1,
@@ -90,6 +96,21 @@ class SentenceRecModel(object):
                                                                                                           val_precision,
                                                                                                           val_recall,
                                                                                                           val_f1))
+                png_epochs.append(epoch)
+                png_accs.append(val_acc)
+                png_f1s.append(val_f1)
+
+            plt.figure(figsize=(8, 4))
+            plt.plot(png_epochs, png_accs, label="准确率", color="#F08080")
+            plt.plot(png_epochs, png_f1s, label="F1值", color="#DB7093")
+
+            plt.xlabel("迭代次数")
+            plt.ylabel("效果")
+            plt.title("使用词向量模型的特征句分类模型效果")
+            plt.grid(alpha=0.4, linestyle=':')
+
+            plt.savefig(config.PNG_DIC + "/原特征句分类模型.png")
+
             logging.info("save sentencerec model")
             saver.save(sess, config.MODEL_DIC + "/" + self._model_name)
 
@@ -99,34 +120,21 @@ class SentenceRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for train_x, train_y in spreprocess.get_batch_traindata(batch_size):
-                _, train_pred_y = sess.run([train_opt, pred], feed_dict={ph_x: train_x, ph_y: train_y})
+            generator = spreprocess.get_batch_traindata
 
-                true_y = np.argmax(train_y, axis=1).copy()
-                pred_y = np.argmax(train_pred_y, axis=1).copy()
+        for train_x, train_y in generator(batch_size):
+            _, train_pred_y = sess.run([train_opt, pred], feed_dict={ph_x: train_x, ph_y: train_y})
+            true_y = np.argmax(train_y, axis=1).copy()
+            pred_y = np.argmax(train_pred_y, axis=1).copy()
 
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
-        else:
-            for train_x, train_y in generator(batch_size):
-                _, train_pred_y = sess.run([train_opt, pred], feed_dict={ph_x: train_x, ph_y: train_y})
-                true_y = np.argmax(train_y, axis=1).copy()
-                pred_y = np.argmax(train_pred_y, axis=1).copy()
-
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y])
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y])
         return total_true_y, total_pred_y
 
     # 测试模型
@@ -139,8 +147,32 @@ class SentenceRecModel(object):
             saver.restore(sess, config.MODEL_DIC + "/" + self._model_name)
 
             test_true_y, test_pred_y = self._epoch_test(sess, ph_x, ph_y, outputs, batch_size, generator)
-            print(test_pred_y,test_true_y,spreprocess.get_total_labels())
+            print(test_pred_y, test_true_y, spreprocess.get_total_labels())
             default_evaluate.print_evaluate(test_true_y, test_pred_y, spreprocess.get_total_labels())
+
+    # 单次迭代测试
+    def _epoch_val(self, sess: tf.Session, ph_x, ph_y, pred, batch_size: int, generator=None):
+        total_true_y = None
+        total_pred_y = None
+
+        if generator is None:
+            generator = spreprocess.get_batch_valdata
+
+        for val_x, val_y in generator(batch_size):
+            pred_y = sess.run(pred, feed_dict={ph_x: val_x, ph_y: val_y})
+
+            true_y = np.argmax(val_y, axis=1).copy()
+            pred_y = np.argmax(pred_y, axis=1).copy()
+
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y])
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y])
+        return total_true_y, total_pred_y
 
     # 单次迭代测试
     def _epoch_test(self, sess: tf.Session, ph_x, ph_y, pred, batch_size: int, generator=None):
@@ -148,35 +180,22 @@ class SentenceRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for test_x, test_y in spreprocess.get_batch_testdata(batch_size):
-                pred_y = sess.run(pred, feed_dict={ph_x: test_x, ph_y: test_y})
+            generator = spreprocess.get_batch_testdata
 
-                true_y = np.argmax(test_y, axis=1).copy()
-                pred_y = np.argmax(pred_y, axis=1).copy()
+        for test_x, test_y in generator(batch_size):
+            pred_y = sess.run(pred, feed_dict={ph_x: test_x, ph_y: test_y})
 
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
-        else:
-            for test_x, test_y in generator(batch_size):
-                pred_y = sess.run(pred, feed_dict={ph_x: test_x, ph_y: test_y})
+            true_y = np.argmax(test_y, axis=1).copy()
+            pred_y = np.argmax(pred_y, axis=1).copy()
 
-                true_y = np.argmax(test_y, axis=1).copy()
-                pred_y = np.argmax(pred_y, axis=1).copy()
-
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y])
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y])
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y])
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y])
         return total_true_y, total_pred_y
 
     # 预测 返回标签向量列表

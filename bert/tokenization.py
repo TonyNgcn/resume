@@ -23,6 +23,7 @@ import re
 import unicodedata
 import six
 import tensorflow as tf
+import logging
 
 
 def validate_case_matches_checkpoint(do_lower_case, init_checkpoint):
@@ -137,7 +138,11 @@ def convert_by_vocab(vocab, items):
   """Converts a sequence of [tokens|ids] using the vocab."""
   output = []
   for item in items:
-    output.append(vocab[item])
+    try:
+      output.append(vocab[item])
+    except:
+      logging.warning("key error:{}".format(item))
+      output.append(vocab["[UNK]"])
   return output
 
 

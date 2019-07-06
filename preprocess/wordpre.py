@@ -58,6 +58,16 @@ class WordPreprocess(object):
             logging.error(e)
             exit(1)
 
+    # 加载验证数据
+    def load_valdata(self):
+        try:
+            wval_x = np.load(config.PREDATA_DIC + '/wval_x.npy')
+            wval_y = np.load(config.PREDATA_DIC + '/wval_y.npy')
+            return wval_x, wval_y
+        except Exception as e:
+            logging.error(e)
+            exit(1)
+
     # 加载测试数据
     def load_testdata(self):
         try:
@@ -78,6 +88,18 @@ class WordPreprocess(object):
             return wtrain_x, wtrain_y
         else:
             logging.error("train data length is less than 0")
+            exit(1)
+
+    # 获取打乱后的验证数据
+    def get_valdata(self):
+        wval_x, wval_y = self.load_valdata()
+
+        wval_x, wval_y = shuffle.shuffle_both(wval_x, wval_y)  # 打乱数据
+
+        if len(wval_x) > 0:
+            return wval_x, wval_y
+        else:
+            logging.error("val data length is less than 0")
             exit(1)
 
     # 获取打乱后的测试数据
@@ -103,6 +125,18 @@ class WordPreprocess(object):
             start += batch_size
         if len(wtrain_x[start:]) > 0:
             yield wtrain_x[start:], wtrain_y[start:]
+
+    # 批量获取打乱后的验证数据
+    def get_batch_valdata(self, batch_size: int):
+        wval_x, wval_y = self.get_valdata()
+
+        total_size = len(wval_x)
+        start = 0
+        while start + batch_size < total_size:
+            yield wval_x[start:start + batch_size], wval_y[start:start + batch_size]
+            start += batch_size
+        if len(wval_x[start:]) > 0:
+            yield wval_x[start:], wval_y[start:]
 
     # 批量获取打乱后的测试数据
     def get_batch_testdata(self, batch_size: int):
@@ -133,6 +167,15 @@ class WordPreprocess(object):
             os.remove(config.PREDATA_DIC + "/wtrain_x.npy")
             os.remove(config.PREDATA_DIC + "/wtrain_y.npy")
             logging.info("remove train data success")
+        except Exception as e:
+            logging.warning(e)
+
+    # 删除测试数据
+    def remove_valdata(self):
+        try:
+            os.remove(config.PREDATA_DIC + "/wval_x.npy")
+            os.remove(config.PREDATA_DIC + "/wval_y.npy")
+            logging.info("remove val data success")
         except Exception as e:
             logging.warning(e)
 
@@ -242,16 +285,18 @@ class WordPreprocess(object):
 
         # 将数据保存下来
         total_size = len(wordvecs_list)
-
+        val_size = int(total_size * rate)
         train_x = wordvecs_list[:int(total_size * rate)]
         train_y = labelvecs_list[:int(total_size * rate)]
+        val_x = wordvecs_list[val_size:int((val_size + total_size) / 2)]
+        val_y = labelvecs_list[val_size:int((val_size + total_size) / 2)]
         test_x = wordvecs_list[int(total_size * rate):]
         test_y = labelvecs_list[int(total_size * rate):]
         wordvecs_list = None
         labelvecs_list = None
 
         logging.info("deal word tag data end")
-        return train_x, train_y, test_x, test_y
+        return train_x, train_y, val_x, val_y, test_x, test_y
 
     def split_tagdata(self, datas: list):
         return self._split_tagdata(datas)

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- 上述3个meta标签*必须*放在最前面，任何其他内容都*必须*跟随其后！ -->
+    <title>智能简历信息元抽取项目 -- 主页</title>
+
+    <!-- Bootstrap -->
+    <link href="{{ url_for('static',filename='plugins/bootstrap-3.3.7-dist/css/bootstrap.min.css') }}" rel="stylesheet"
+          type="text/css">
+    <script src="{{ url_for('static',filename='plugins/jquery-3.3.1.min.js') }}"></script>
+    <script src="{{ url_for('static',filename='plugins/bootstrap-3.3.7-dist/js/bootstrap.min.js') }}"></script>
+    <!--<script src="{{ url_for('static',filename='js/home.js') }}"></script>-->
+</head>
+<body>
+<header class="navbar navbar-static-top navbar-default">
+    <div class="container">
+        <div class="navbar-header">
+            <span class="navbar-brand">智能简历信息元抽取项目</span>
+        </div>
+        <nav class="collase navbar-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li class="dropdown">
+                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true"
+                       aria-expanded="false">关于我们 <span class="caret"></span></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="#">GitHub</a></li>
+                        <li><a href="#">微信</a></li>
+                        <li><a href="#">QQ</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+
+            <form class="col-md-8 col-md-offset-2" method="post">
+                <div class="form-group">
+                    <h3 class="text-center">原始简历</h3>
+                    <textarea class="form-control" placeholder="请输入单条简历" rows="5" name="resume_input"></textarea>
+                </div>
+                <button type="submit" class="btn btn-default pull-right" id="submits">抽取</button>
+            </form>
+
+
+            {% if regresume %}
+            <div class="col-md-10 col-md-offset-1">
+                <div class="row">
+
+                    <h3 class="text-center">简历信息</h3>
+
+                    <div>
+                        <h3>
+                            <small>基本信息：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <colgroup>
+                                <col class="col-xs-1">
+                                <col class="col-xs-7">
+                            </colgroup>
+                            <tbody>
+                            <tr>
+                                <td>姓名</td>
+                                <td>{{ regresume['basic_info']['name'] }}</td>
+                            </tr>
+                            <tr>
+                                <td>性别</td>
+                                <td>{{ regresume['basic_info']['sex'] }}</td>
+                            </tr>
+                            <tr>
+                                <td>出生时间</td>
+                                <td>{{ regresume['basic_info']['born'] }}</td>
+                            </tr>
+                            <tr>
+                                <td>国籍</td>
+                                <td>{{ regresume['basic_info']['nationality'] }}</td>
+                            </tr>
+                            <tr>
+                                <td>民族</td>
+                                <td>{{ regresume['basic_info']['nation'] }}</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if regresume['school_exp']['current']|length > 0 %}
+                    <!-- TODO 先只判断现在的学习经历-->
+                    <div>
+                        <h3>
+                            <small>现在学习经历：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <tr>
+                                <td>时间</td>
+                                <td>学校</td>
+                                <td>专业</td>
+                                <td>学历</td>
+                                <td>学位</td>
+                            </tr>
+                            {% for exp in regresume['school_exp']['current'] %}
+                            <tr>
+                                <td>{{ exp['time']|default('') }}</td>
+                                <td>{{ exp['school']|default('') }}</td>
+                                <td>{{ exp['pro']|default('') }}</td>
+                                <td>{{ exp['degree']|default('') }}</td>
+                                <td>{{ exp['edu']|default('') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+                    {% endif %}
+
+                    {% if regresume['school_exp']['past']|length > 0 %}
+                    <!-- TODO 先只判断过去的学习经历-->
+                    <div>
+                        <h3>
+                            <small>过去学习经历：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <tr>
+                                <td>时间</td>
+                                <td>学校</td>
+                                <td>专业</td>
+                                <td>学历</td>
+                                <td>学位</td>
+                            </tr>
+                            {% for exp in regresume['school_exp']['past'] %}
+                            <tr>
+                                <td>{{ exp['time']|default('') }}</td>
+                                <td>{{ exp['school']|default('') }}</td>
+                                <td>{{ exp['pro']|default('') }}</td>
+                                <td>{{ exp['degree']|default('') }}</td>
+                                <td>{{ exp['edu']|default('') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+                    {% endif %}
+
+                    {% if regresume['work_exp']['current']|length > 0 %}
+                    <div>
+                        <h3>
+                            <small>现在工作经历：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <tbody>
+                            <tr>
+                                <td>时间</td>
+                                <td>地点</td>
+                                <td>部门</td>
+                                <td>工作</td>
+                            </tr>
+                            {% for exp in regresume['work_exp']['current'] %}
+                            <tr>
+                                <td>{{ exp['time']|default('') }}</td>
+                                <td>{{ exp['place']|default('') }}</td>
+                                <td>{{ exp['department']|default('') }}</td>
+                                <td>{{ exp['job']|default('') }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+
+                    {% if regresume['work_exp']['past']|length > 0 %}
+                    <div>
+                        <h3>
+                            <small>过去工作经历：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <tbody>
+                            <tr>
+                                <td>时间</td>
+                                <td>地点</td>
+                                <td>部门</td>
+                                <td>工作</td>
+                            </tr>
+                            {% for exp in regresume['work_exp']['past'] %}
+                            <tr>
+                                <td>{{ exp['time']|default('') }}</td>
+                                <td>{{ exp['place']|default('') }}</td>
+                                <td>{{ exp['department']|default('') }}</td>
+                                <td>{{ exp['job']|default('') }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+            {% endif %}
+
+
+            <!--
+            <div class="col-md-10 col-md-offset-1">
+                <div class="row">
+                    <h3 class="text-center">简历信息</h3>
+                    <div>
+                        <h3>
+                            <small>基本信息：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <colgroup>
+                                <col class="col-xs-1">
+                                <col class="col-xs-7">
+                            </colgroup>
+                            <tbody>
+                            <tr>
+                                <td>姓名</td>
+                                <td>黄早艺</td>
+                            </tr>
+                            <tr>
+                                <td>性别</td>
+                                <td>男</td>
+                            </tr>
+                            <tr>
+                                <td>出生时间</td>
+                                <td>1996年7月15日</td>
+                            </tr>
+                            <tr>
+                                <td>国籍</td>
+                                <td>中国</td>
+                            </tr>
+                            <tr>
+                                <td>民族</td>
+                                <td>汉族</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h3>
+                            <small>学习经历：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <tbody>
+                            <tr>
+                                <td>时间</td>
+                                <td>学校</td>
+                                <td>专业</td>
+                                <td>学历</td>
+                                <td>学位</td>
+                            </tr>
+                            <tr>
+                                <td>1996年7月15日</td>
+                                <td>东莞理工学院</td>
+                                <td>计算机</td>
+                                <td>学士</td>
+                                <td>本科</td>
+                            </tr>
+                            <tr>
+                                <td>1996年7月15日</td>
+                                <td>东莞理工学院</td>
+                                <td>计算机</td>
+                                <td>学士</td>
+                                <td>本科</td>
+                            </tr>
+                            <tr>
+                                <td>1996年7月15日</td>
+                                <td>东莞理工学院</td>
+                                <td>计算机</td>
+                                <td>学士</td>
+                                <td>本科</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h3>
+                            <small>工作经历：</small>
+                        </h3>
+                        <table class="table table-bordered table-striped">
+                            <tbody>
+                            <tr>
+                                <td>时间</td>
+                                <td>地点</td>
+                                <td>部门</td>
+                                <td>工作</td>
+                            </tr>
+                            <tr>
+                                <td>2016年5月至今</td>
+                                <td>江苏康杰机械股份有限公司</td>
+                                <td></td>
+                                <td>董事</td>
+                            </tr>
+                            <tr>
+                                <td>2016年5月至今</td>
+                                <td>江苏康杰机械股份有限公司</td>
+                                <td>生产部</td>
+                                <td>部长</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-default pull-right">点击复制简历信息（json格式）</button>
+                </div>
+            </div>
+            -->
+        </div>
+    </div>
+</div>
+
+<br>
+<br>
+<br>
+
+
+<footer class="navbar navbar-static-bottom">
+    <div class="footer">
+        <div class="container text-center">
+            <p>使用bootstrap框架实现前端</p>
+            <!--<p>如有版权问题，请QQ:1037725467</p>-->
+        </div>
+    </div>
+</footer>
+</body>
+</html>

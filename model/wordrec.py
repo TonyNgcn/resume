@@ -6,6 +6,7 @@ from tensorflow import keras
 from tensorflow.contrib import crf
 import logging
 import numpy as np
+import matplotlib.pyplot as plt
 
 import config
 from preprocess.wordpre import preprocess as wpreprocess
@@ -77,7 +78,7 @@ class WordRecModel(object):
 
     # 训练模型
     def train(self, epochs: int = config.WR_EPOCHS, batch_size: int = config.WR_BATCH_SIZE,
-              continue_train: bool = False, train_generator=None, test_generator=None):
+              continue_train: bool = False, train_generator=None, val_generator=None):
         logging.info("wordrec model train")
         if continue_train:
             sess, ph_sequence_lengths, ph_x, ph_y, loss, train_opt, outputs = self.get_trained_model()
@@ -86,6 +87,18 @@ class WordRecModel(object):
 
         with sess.graph.as_default():
             saver = tf.train.Saver(max_to_keep=1)
+
+            png_epochs = []
+            png_accs = []
+            png_f1s = []
+
+            plt.figure(figsize=(10, 5))
+            plt.title("Training a named entity recognition model using a word vector model")
+            plt.xlabel(u"Epoch")
+            plt.xticks(np.arange(0, config.WR_EPOCHS + 1, 1))
+            plt.ylabel(u"Effect")
+            plt.yticks(np.arange(0, 1.1, 0.05))
+
             for epoch in range(epochs):
                 train_true_y, train_pred_y = self._epoch_train(sess, ph_sequence_lengths, ph_x, ph_y, train_opt,
                                                                outputs, batch_size, train_generator)
@@ -94,8 +107,8 @@ class WordRecModel(object):
                 print('epoch:{} batch size:{} acc:{} precision:{} recall:{} f1:{}'.format(epoch + 1, batch_size, acc,
                                                                                           precision, recall, f1))
 
-                test_true_y, test_pred_y = self._epoch_test(sess, ph_sequence_lengths, ph_x, ph_y, outputs,
-                                                            batch_size, test_generator)
+                test_true_y, test_pred_y = self._epoch_val(sess, ph_sequence_lengths, ph_x, ph_y, outputs,
+                                                            batch_size, val_generator)
                 val_acc = default_evaluate.calculate_accuracy(train_true_y, train_pred_y)
                 val_precision, val_recall, val_f1 = default_evaluate.calculate_avg_prf(test_true_y, test_pred_y)
                 print('epoch:{} batch size:{} val_acc:{} val_precision:{} val_recall:{} val_f1:{}'.format(epoch + 1,
@@ -104,6 +117,17 @@ class WordRecModel(object):
                                                                                                           val_precision,
                                                                                                           val_recall,
                                                                                                           val_f1))
+
+                png_epochs.append(epoch)
+                png_accs.append(val_acc)
+                png_f1s.append(val_f1)
+
+            plt.plot(png_epochs, png_accs, "-", label="Accuracy")
+            plt.plot(png_epochs, png_f1s, "-", color="r", label="F1-measure")
+            plt.legend()
+            plt.grid()
+            plt.savefig(config.PNG_DIC + "/词向量模型命名实体识别模型.png")
+
             logging.info("save wordrec model")
             saver.save(sess, config.MODEL_DIC + "/" + self._model_name)
 
@@ -114,41 +138,25 @@ class WordRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for train_x, train_y in wpreprocess.get_batch_traindata(batch_size):
-                lengths = [self._sentence_len for _ in range(len(train_y))]
-                sequence_lengths = np.array(lengths, dtype=np.int32)
-                _, pred_y = sess.run([train_opt, pred],
-                                     feed_dict={ph_sequence_lengths: sequence_lengths, ph_x: train_x, ph_y: train_y})
+            generator = wpreprocess.get_batch_traindata
 
-                true_y = np.reshape(train_y, [-1, ]).copy()
-                pred_y = np.reshape(pred_y, [-1, ]).copy()
+        for train_x, train_y in generator(batch_size):
+            lengths = [self._sentence_len for _ in range(len(train_y))]
+            sequence_lengths = np.array(lengths, dtype=np.int32)
+            _, pred_y = sess.run([train_opt, pred],
+                                 feed_dict={ph_sequence_lengths: sequence_lengths, ph_x: train_x, ph_y: train_y})
 
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y], axis=None)
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y], axis=None)
-        else:
-            for train_x, train_y in generator(batch_size):
-                lengths = [self._sentence_len for _ in range(len(train_y))]
-                sequence_lengths = np.array(lengths, dtype=np.int32)
-                _, pred_y = sess.run([train_opt, pred],
-                                     feed_dict={ph_sequence_lengths: sequence_lengths, ph_x: train_x, ph_y: train_y})
+            true_y = np.reshape(train_y, [-1, ]).copy()
+            pred_y = np.reshape(pred_y, [-1, ]).copy()
 
-                true_y = np.reshape(train_y, [-1, ]).copy()
-                pred_y = np.reshape(pred_y, [-1, ]).copy()
-
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y], axis=None)
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y], axis=None)
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y], axis=None)
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y], axis=None)
         return total_true_y, total_pred_y
 
     # 测试模型
@@ -161,8 +169,34 @@ class WordRecModel(object):
 
             test_true_y, test_pred_y = self._epoch_test(sess, ph_sequence_lengths, ph_x, ph_y, outputs, batch_size,
                                                         generator)
-            print(test_true_y,test_pred_y,wpreprocess.get_total_labels())
+            print(test_true_y, test_pred_y, wpreprocess.get_total_labels())
             default_evaluate.print_evaluate(test_true_y, test_pred_y, wpreprocess.get_total_labels())
+
+    # 单次迭代测试
+    def _epoch_val(self, sess: tf.Session, ph_sequence_lengths, ph_x, ph_y, pred, batch_size: int, generator=None):
+        total_true_y = None
+        total_pred_y = None
+
+        if generator is None:
+            generator = wpreprocess.get_batch_valdata
+
+        for val_x, val_y in generator(batch_size):
+            lengths = [self._sentence_len for _ in range(len(val_y))]
+            sequence_lengths = np.array(lengths, dtype=np.int32)
+            pred_y = sess.run(pred, feed_dict={ph_sequence_lengths: sequence_lengths, ph_x: val_x, ph_y: val_y})
+
+            true_y = np.reshape(val_y, [-1, ]).copy()
+            pred_y = np.reshape(pred_y, [-1, ]).copy()
+
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y], axis=None)
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y], axis=None)
+        return total_true_y, total_pred_y
 
     # 单次迭代测试
     def _epoch_test(self, sess: tf.Session, ph_sequence_lengths, ph_x, ph_y, pred, batch_size: int, generator=None):
@@ -170,39 +204,24 @@ class WordRecModel(object):
         total_pred_y = None
 
         if generator is None:
-            for test_x, test_y in wpreprocess.get_batch_testdata(batch_size):
-                lengths = [self._sentence_len for _ in range(len(test_y))]
-                sequence_lengths = np.array(lengths, dtype=np.int32)
-                pred_y = sess.run(pred, feed_dict={ph_sequence_lengths: sequence_lengths, ph_x: test_x, ph_y: test_y})
+            generator = wpreprocess.get_batch_testdata
 
-                true_y = np.reshape(test_y, [-1, ]).copy()
-                pred_y = np.reshape(pred_y, [-1, ]).copy()
+        for test_x, test_y in generator(batch_size):
+            lengths = [self._sentence_len for _ in range(len(test_y))]
+            sequence_lengths = np.array(lengths, dtype=np.int32)
+            pred_y = sess.run(pred, feed_dict={ph_sequence_lengths: sequence_lengths, ph_x: test_x, ph_y: test_y})
 
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y], axis=None)
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y], axis=None)
-        else:
-            for test_x, test_y in generator(batch_size):
-                lengths = [self._sentence_len for _ in range(len(test_y))]
-                sequence_lengths = np.array(lengths, dtype=np.int32)
-                pred_y = sess.run(pred, feed_dict={ph_sequence_lengths: sequence_lengths, ph_x: test_x, ph_y: test_y})
+            true_y = np.reshape(test_y, [-1, ]).copy()
+            pred_y = np.reshape(pred_y, [-1, ]).copy()
 
-                true_y = np.reshape(test_y, [-1, ]).copy()
-                pred_y = np.reshape(pred_y, [-1, ]).copy()
-
-                if total_true_y is None:
-                    total_true_y = true_y
-                else:
-                    total_true_y = np.concatenate([total_true_y, true_y], axis=None)
-                if total_pred_y is None:
-                    total_pred_y = pred_y
-                else:
-                    total_pred_y = np.concatenate([total_pred_y, pred_y], axis=None)
+            if total_true_y is None:
+                total_true_y = true_y
+            else:
+                total_true_y = np.concatenate([total_true_y, true_y], axis=None)
+            if total_pred_y is None:
+                total_pred_y = pred_y
+            else:
+                total_pred_y = np.concatenate([total_pred_y, pred_y], axis=None)
         return total_true_y, total_pred_y
 
     # 预测 返回标签向量列表

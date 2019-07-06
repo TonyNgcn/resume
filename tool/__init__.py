@@ -4,4 +4,4 @@
 # import config
 # from holder.jiebah import jieba_holder
 
-__all__ = ["bigfile", "shuffle", "splitword", "evaluate"]
+__all__ = ["bigfile", "shuffle", "mysplit", "evaluate"]

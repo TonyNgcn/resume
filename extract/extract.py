@@ -1,9 +1,12 @@
 #!/usr/bin/python 
 # -*- coding: utf-8 -*-
 
-from .predict import Predictor
+from .predict import BertPredictor
 from .splitsentence import resume2sentences
-from preprocess.sentencepre import preprocess as srpre
+# from preprocess.sentencepre import preprocess as srpre
+
+from preprocess.bert_sentencepre import default_preprocess as spreprocess
+from preprocess.bert_wordpre_test import default_preprocess as wpreprocess
 
 
 class ResumeFormat(object):
@@ -227,7 +230,7 @@ default_format = ResumeFormat()
 
 class Extractor(object):
     def __init__(self):
-        self._predictor = Predictor()
+        self._predictor = BertPredictor()
 
     def single_extract(self, resume: str):
         return self._extract(resume)
@@ -246,17 +249,17 @@ class Extractor(object):
     def _extract(self, resume: str):
         sentences = resume2sentences(resume)
 
-        regwords_list = srpre.sentence2regwords(sentences)
-        sentences = None
-        wordvecs_list = srpre.words2vec(regwords_list)
+        regchars_list = spreprocess.sentences2regchars_list(sentences)
+        embeddings = wpreprocess.regchars2embeddings(regchars_list)
 
-        sentence_label_list = self._predictor.sentence_predict(wordvecs_list)
-        word_labels_list = self._predictor.word_predict(wordvecs_list)
+        sentence_label_list = self._predictor.sentence_predict(embeddings)
+        word_labels_list = self._predictor.word_predict(embeddings)
+
+        embeddings = None
 
         # 处理实体词
-
         sentence_label_list, notional_words_list, notional_labels_list = self._deal_notional_words(
-            sentence_label_list, regwords_list, word_labels_list)
+            sentence_label_list, regchars_list, word_labels_list)
 
         # 将实体词转成格式化简历
         return self._notional_words2regresume(sentence_label_list, notional_words_list, notional_labels_list)
@@ -266,7 +269,7 @@ class Extractor(object):
         notional_words_list = []  # 保存实体词
         notional_labels_list = []  # 保存实体词标签
 
-        total_labels = srpre.get_total_labels()
+        total_labels = spreprocess.get_total_labels()
         for sentence_label, words, word_labels in zip(sentence_label_list, words_list, word_labels_list):
             if sentence_label == total_labels[0]:  # ctime
                 notional_words, notional_labels = self._deal_ctime(words, word_labels)
@@ -1589,3 +1592,10 @@ class Extractor(object):
             clear_wexp()
 
         return regresume
+
+
+if __name__ == '__main__':
+    resume = "sdfsdfsdfsdf,sfsdfsdfsdf"
+    extractor = Extractor()
+    extractor.single_extract(resume)
+    extractor.batch_extract([resume])

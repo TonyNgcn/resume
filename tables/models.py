@@ -8,24 +8,46 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 
-class Label(Base):
-    __tablename__ = "label"
+class SLabel(Base):
+    __tablename__ = 'slabel'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    label = Column(VARCHAR(20), nullable=False)
+    label = Column(VARCHAR(20), nullable=True)
 
 
-class Mark(Base):
-    __tablename__ = "mark"
+class SMark(Base):
+    __tablename__ = 'smark'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    content = Column(TEXT, nullable=True)
+    label_mark = Column(VARCHAR(20), nullable=True)
+    num = Column(Integer, default=0, nullable=True)
+
+
+
+class SData(Base):
+    __tablename__ = "sdata"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     content = Column(TEXT, nullable=False)
-    label_mark = Column(VARCHAR(20), nullable=False)
-    num = Column(Integer, nullable=False, default=0)
+    label = Column(VARCHAR(20), nullable=False)
+
+class WLabel(Base):
+    __tablename__ = 'wlabel'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    label = Column(VARCHAR(20), nullable=True)
 
 
-class Data(Base):
-    __tablename__ = "data"
+class WMark(Base):
+    __tablename__ = 'wmark'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    content = Column(TEXT, nullable=True)
+    label_marks = Column(TEXT, nullable=True)
+    num = Column(Integer, default=0, nullable=True)
+
+
+
+class WData(Base):
+    __tablename__ = "wdata"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     content = Column(TEXT, nullable=False)
-    label = Column(VARCHAR(20), nullable=False)
+    labels = Column(TEXT, nullable=False)

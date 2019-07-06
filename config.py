@@ -31,12 +31,14 @@ TMP_DIC = PROJECT_ROOT + "/file/tmp"  # 协同训练模型未处理数据文件�
 TMP_SR_DIC = TMP_DIC + "/sr"
 TMP_WR_DIC = TMP_DIC + "/wr"
 
+PNG_DIC = PROJECT_ROOT + "/file/png"
+
 # 模型配置
-SENTENCE_LEN = 50  # 句子长度
+SENTENCE_LEN = 50  # 25  # 句子长度
 
 BERT_EMBEDDING_SIZE = 768
 
-WORDVEC_SIZE = 150  # 词向量维度
+WORDVEC_SIZE = 150  # 120  # 词向量维度
 
 # 特征句分类模型参数
 
@@ -53,11 +55,11 @@ SR_BIGRU_DROPOUT = 0.5  # bigru dropout值
 
 # 命名实体识别模型参数
 
-WR_RATE = 0.75  # 训练集占标注集的百分比
+WR_RATE = 0.70  # 训练集占标注集的百分比
 
 WR_STUDY_RATE = 0.005  # 学习率
 
-WR_EPOCHS = 15  # 训练模型迭代次数
+WR_EPOCHS = 50  # 训练模型迭代次数
 
 WR_BATCH_SIZE = 200  # 训练模型每次输入数据条数
 
@@ -68,7 +70,7 @@ WR_BIGRU1_UNITS = 256  # bigru1 单元个数
 WR_BIGRU1_DROPOUT = 0.5  # bigru1 dropout值
 
 # logging.basicConfig(filename=LOG_DIC+"/resume_import.log",format='%(asctime)s %(levelname)s:%(message)s', level=logging.ERROR)
-logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.WARNING)
 
 # 数据库
 DIALECT = 'mysql'

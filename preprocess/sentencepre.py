@@ -53,6 +53,16 @@ class SentencePreprocess(object):
             logging.error(e)
             exit(1)
 
+    # 加载验证数据
+    def load_valdata(self):
+        try:
+            sval_x = np.load(config.PREDATA_DIC + '/sval_x.npy')
+            sval_y = np.load(config.PREDATA_DIC + '/sval_y.npy')
+            return sval_x, sval_y
+        except Exception as e:
+            logging.error(e)
+            exit(1)
+
     # 加载测试数据
     def load_testdata(self):
         try:
@@ -73,6 +83,18 @@ class SentencePreprocess(object):
             return strain_x, strain_y
         else:
             logging.error("train data length is less than 0")
+            exit(1)
+
+    # 获取打乱后的验证数据
+    def get_valdata(self):
+        sval_x, sval_y = self.load_valdata()
+
+        sval_x, sval_y = shuffle.shuffle_both(sval_x, sval_y)  # 打乱数据
+
+        if len(sval_x) > 0:
+            return sval_x, sval_y
+        else:
+            logging.error("val data length is less than 0")
             exit(1)
 
     # 获取打乱后的测试数据
@@ -98,6 +120,18 @@ class SentencePreprocess(object):
             start += batch_size
         if len(strain_x[start:]) > 0:
             yield strain_x[start:], strain_y[start:]
+
+    # 批量获取打乱后的验证数据
+    def get_batch_valdata(self, batch_size: int):
+        sval_x, sval_y = self.get_valdata()
+
+        total_size = len(sval_x)
+        start = 0
+        while start + batch_size < total_size:
+            yield sval_x[start:start + batch_size], sval_y[start:start + batch_size]
+            start += batch_size
+        if len(sval_x[start:]) > 0:
+            yield sval_x[start:], sval_y[start:]
 
     # 批量获取打乱后的测试数据
     def get_batch_testdata(self, batch_size: int):
@@ -128,6 +162,15 @@ class SentencePreprocess(object):
             os.remove(config.PREDATA_DIC + "/strain_x.npy")
             os.remove(config.PREDATA_DIC + "/strain_y.npy")
             logging.info("remove train data success")
+        except Exception as e:
+            logging.warning(e)
+
+    # 删除测试数据
+    def remove_valdata(self):
+        try:
+            os.remove(config.PREDATA_DIC + "/sval_x.npy")
+            os.remove(config.PREDATA_DIC + "/sval_y.npy")
+            logging.info("remove val data success")
         except Exception as e:
             logging.warning(e)
 
@@ -224,16 +267,18 @@ class SentencePreprocess(object):
 
         # 将数据保存下来
         total_size = len(sentencevecs)
-
-        train_x = sentencevecs[:int(total_size * rate)]
-        train_y = labelvecs[:int(total_size * rate)]
-        test_x = sentencevecs[int(total_size * rate):]
-        test_y = labelvecs[int(total_size * rate):]
+        val_size = int(total_size * rate)
+        train_x = sentencevecs[:val_size]
+        train_y = labelvecs[:val_size]
+        val_x = sentencevecs[val_size:int((val_size + total_size) / 2)]
+        val_y = labelvecs[val_size:int((val_size + total_size) / 2)]
+        test_x = sentencevecs[int((val_size + total_size) / 2):]
+        test_y = labelvecs[int((val_size + total_size) / 2):]
         sentencevecs = None
         labelvecs = None
 
         logging.info("deal sentence tag data end")
-        return train_x, train_y, test_x, test_y
+        return train_x, train_y, val_x, val_y, test_x, test_y
 
     def _split_tagdata(self, datas: list):
         sentences = list()  # 保存分词后的句子
